@@ -4630,20 +4630,22 @@ endmodule
 
 // Tiny Tapeout wrapper module
 module tt_um_range_finder (
-    input  wire       clk,
-    input  wire       rst_n,
-    input  wire [7:0] ui,
+    input  wire [7:0] ui_in,    // Dedicated inputs
+    output wire [7:0] uo_out,   // Dedicated outputs
+    input  wire [7:0] uio_in,   // IOs: Input path
+    output wire [7:0] uio_out,  // IOs: Output path
+    output wire [7:0] uio_oe,   // IOs: Enable path (active high: 0=input, 1=output)
     input  wire       ena,
-    output wire [7:0] uo,
-    inout  wire [7:0] uio
+    input  wire       clk,
+    input  wire       rst_n
 );
     
     // Map Tiny Tapeout pins to day_12_solver interface
     wire clock = clk;
     wire clear = ~rst_n;
-    wire s_tvalid = ui[0];
-    wire m_tready = ui[1];
-    wire [7:0] s_tdata = ui[7:0];
+    wire s_tvalid = uio_in[0];
+    wire m_tready = uio_in[1];
+    wire [7:0] s_tdata = ui_in[7:0];
     
     wire s_tready;
     wire m_tvalid;
@@ -4664,12 +4666,12 @@ module tt_um_range_finder (
     );
     
     // Output mapping
-    assign uo[7:0] = m_tdata[7:0];
+    assign uo_out[7:0] = m_tdata[7:0];
     
     // Bidirectional mapping
-    assign uio[0] = s_tready;
-    assign uio[1] = m_tvalid;
-    assign uio[2] = m_tlast;
-    assign uio[7:3] = 5'b0;
+    assign uio_out[0] = s_tready;
+    assign uio_out[1] = m_tvalid;
+    assign uio_out[2] = m_tlast;
+    assign uio_out[7:3] = 5'b0;
 
 endmodule
