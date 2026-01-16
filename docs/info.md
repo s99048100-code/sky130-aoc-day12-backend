@@ -9,12 +9,10 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
-
+This is some RTL that uses sudo recursion to solve the advent of code problem 12 for 2025
 ## How to test
 
-Explain how to use your project
-
+The testing is done namely in the hardcaml and system verilog iterations, the tests here are not comprehensive
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+No external hardware used really
