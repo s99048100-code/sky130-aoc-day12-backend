@@ -4633,6 +4633,7 @@ module tt_um_range_finder (
     input  wire       clk,
     input  wire       rst_n,
     input  wire [7:0] ui,
+    input  wire       ena,
     output wire [7:0] uo,
     inout  wire [7:0] uio
 );
