@@ -2788,12 +2788,10 @@ module Day_12_solver_top (
 
 endmodule
 
-
-
 // Tiny Tapeout wrapper module
 module tt_um_range_finder (
-    input  wire [7:0] ui_in,    // Dedicated inputs
-    output wire [7:0] uo_out,   // Dedicated outputs
+    input  wire [7:0] ui_in,    // Dedicated inputs  (s_tdata)
+    output wire [7:0] uo_out,   // Dedicated outputs (m_tdata)
     input  wire [7:0] uio_in,   // IOs: Input path
     output wire [7:0] uio_out,  // IOs: Output path
     output wire [7:0] uio_oe,   // IOs: Enable path (active high: 0=input, 1=output)
@@ -2802,12 +2800,21 @@ module tt_um_range_finder (
     input  wire       rst_n
 );
     
-    // Map Tiny Tapeout pins to day_12_solver interface
+    // Map Tiny Tapeout pins to internal signals
     wire clock = clk;
     wire clear = ~rst_n;
+    wire [7:0] s_tdata = ui_in[7:0];
+
+    // --- PIN MAPPING FIX ---
+    // We must separate Inputs and Outputs on the UIO bus.
+    // uio[0] -> s_tvalid (Input)
+    // uio[1] -> m_tready (Input)
+    // uio[2] -> s_tready (Output)
+    // uio[3] -> m_tvalid (Output)
+    // uio[4] -> m_tlast  (Output)
+    
     wire s_tvalid = uio_in[0];
     wire m_tready = uio_in[1];
-    wire [7:0] s_tdata = ui_in[7:0];
     
     wire s_tready;
     wire m_tvalid;
@@ -2827,13 +2834,21 @@ module tt_um_range_finder (
         .m_tdata(m_tdata)
     );
     
-    // Output mapping
+    // Dedicated Outputs
     assign uo_out[7:0] = m_tdata[7:0];
     
-    // Bidirectional mapping
-    assign uio_out[0] = s_tready;
-    assign uio_out[1] = m_tvalid;
-    assign uio_out[2] = m_tlast;
-    assign uio_out[7:3] = 5'b0;
+    // Bidirectional Output Mapping
+    // Note: uio_out bits for Inputs (0 and 1) don't matter, usually set to 0
+    assign uio_out[0] = 1'b0;      // Input pin
+    assign uio_out[1] = 1'b0;      // Input pin
+    assign uio_out[2] = s_tready;  // Output pin
+    assign uio_out[3] = m_tvalid;  // Output pin
+    assign uio_out[4] = m_tlast;   // Output pin
+    assign uio_out[7:5] = 3'b0;    // Unused
+
+    // --- CRITICAL FIX: Output Enable Assignment ---
+    // 1 = Output, 0 = Input
+    // Pins 2, 3, 4 are Outputs. Pins 0, 1 are Inputs.
+    assign uio_oe = 8'b00011100;
 
 endmodule
