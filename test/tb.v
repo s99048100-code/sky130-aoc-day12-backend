@@ -27,8 +27,8 @@ module tb ();
   wire VGND = 1'b0;
 `endif
 
-  // Replace tt_um_example with your module name:
-  tt_um_example user_project (
+  // --- FIX: Instantiating tt_um_range_finder instead of tt_um_example ---
+  tt_um_range_finder user_project (
 
       // Include power ports for the Gate Level test:
 `ifdef GL_TEST
