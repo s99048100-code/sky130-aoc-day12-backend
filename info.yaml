@@ -1,9 +1,9 @@
 # Tiny Tapeout project information
 project:
-  title:        "Range Finder Packing Puzzle Solver"
-  author:       "Hardcaml Developer"
-  discord:      ""
-  description:  "DFS backtracking solver for packing 6 different gift shapes onto a grid using streaming AXI interface"
+  title:        "Solution to Day 12 of the Advent of the FPGA"
+  author:       "Robert Solomon Saab"
+  discord:      ".djharvey"
+  description:  "DFS backtracking solver for packing 6 different gift shapes onto a grid using streaming AXI interface as I/O"
   language:     "Verilog"
   clock_hz:     10000000
 
