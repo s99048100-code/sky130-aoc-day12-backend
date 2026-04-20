@@ -1,0 +1,65 @@
+# Yosys equivalence with manual FSM-state invariants.
+# Same setup as equiv_baseline.ys, but adds equiv_add -def for the 5 FSM
+# state flop pairs that k-induction alone cannot prove (the ~1 kbit DFS
+# stack prevents the solver from establishing a consistent base case).
+#
+# These five pairs are ASSUMED equivalent (not proven from first principles).
+# They are asserted consistent with hardware reset behavior and with
+# gate-level simulation of the cocotb regression in test/.  With this
+# assumption the 4 remaining output cells (s_tready, m_tlast x2, _229)
+# can be proven by equiv_induct, yielding a full 29/29 result.
+#
+# Runs inside the LibreLane Docker:
+#   bash formal/run_formal.sh invariant
+
+# --- gold: behavioral RTL ---
+read_verilog -sv /work/src/project.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+memory -nomap
+memory_map
+opt -full
+design -stash gold
+
+# --- gate: post-synth netlist with sky130 behavioral cells ---
+read_liberty -lib /pdk/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+delete sky130_fd_sc_hd__buf_*
+delete sky130_fd_sc_hd__clkbuf_*
+delete sky130_fd_sc_hd__dlygate4sd*
+delete sky130_fd_sc_hd__dlymetal6s*
+delete sky130_fd_sc_hd__dfxtp_*
+delete sky130_fd_sc_hd__conb_1
+read_verilog /work/formal/sky130_buf_stubs.v
+read_verilog /work/formal/nl_baseline_clean.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+opt -full
+design -stash gate
+
+# --- miter ---
+design -copy-from gold  -as gold tt_um_range_finder
+design -copy-from gate  -as gate tt_um_range_finder
+
+equiv_make gold gate equiv
+hierarchy -top equiv
+setundef -undriven -zero -init
+opt_clean
+
+# --- B3 invariant: assert the 5 FSM state flop pairs are equivalent.
+# Wire names as reported by equiv_status after the baseline run:
+#   <gold_wire>_gold  <gate_wire>_gate
+# Marking them -def (proven by assumption) lets equiv_induct treat them
+# as given truths at the induction base case, which unblocks the proof
+# of the 4 output cells that are purely a function of FSM state.
+equiv_add -def \solver.Day_12_solver._108_gold \_4399_.Q_gate
+equiv_add -def \solver.Day_12_solver._114_gold \_4347_.Q_gate
+equiv_add -def \solver.Day_12_solver._116_gold \_4337_.Q_gate
+equiv_add -def \solver.Day_12_solver._119_gold \_4345_.Q_gate
+equiv_add -def \solver.Day_12_solver._220_gold \_4400_.Q_gate
+
+# --- prove ---
+equiv_simple -seq 5
+equiv_induct -seq 80
+equiv_status

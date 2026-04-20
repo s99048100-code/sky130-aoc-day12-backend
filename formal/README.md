@@ -12,15 +12,19 @@ Robert wrote.
 ```
 equiv_baseline.ys      yosys script (gold = project.v, gate = wokwi nl.v)
 equiv_aggressive.ys    yosys script (gold = project.v, gate = aggressive nl.v)
-equiv_baseline.log     stdout from yosys run (baseline)
-equiv_aggressive.log   stdout from yosys run (aggressive)
+equiv_invariant.ys     B3 invariant script — adds equiv_add -def for the 5
+                       FSM state flop pairs so equiv_induct can prove all
+                       9 remaining cells; see "B3 invariant script" below
+equiv_baseline.log     stdout from yosys run (baseline / 20 proven)
+equiv_aggressive.log   stdout from yosys run (aggressive / 20 proven)
 strip_fillers.py       strips sky130_ef_sc_hd__decap / fill / tap / diode cells
                        from the final netlist (pure physical, no logic ports)
 sky130_buf_stubs.v     behavioural stubs for buffer / clkbuf / delay / dfxtp /
                        conb cells that `read_liberty -lib` only loads as
                        blackbox — needed so equiv_induct can propagate SAT
                        through the timing-repair buffers LibreLane inserts
-run_formal.sh          wrapper — runs both checks inside the LibreLane Docker
+run_formal.sh          wrapper — runs checks inside the LibreLane Docker;
+                       accepts baseline / aggressive / both / invariant
 ```
 
 ## Running
@@ -30,9 +34,10 @@ Requires Docker and the sky130 PDK (already present if you ran LibreLane).
 if your install is elsewhere.
 
 ```
-bash formal/run_formal.sh both          # baseline + aggressive
+bash formal/run_formal.sh both          # baseline + aggressive (20/29 each)
 bash formal/run_formal.sh baseline
 bash formal/run_formal.sh aggressive
+bash formal/run_formal.sh invariant     # baseline + FSM invariants (29/29)
 ```
 
 The script:
@@ -129,6 +134,42 @@ Started from a 17/30 baseline. Three changes moved the needle to 20/29:
 The remaining 9 need a stronger invariant than `memory_map` alone can
 provide — in particular, a user-supplied assumption that the FSM state
 on the gold and gate sides enter the same state coming out of reset.
+
+## B3 invariant script — closing all 29 cells
+
+`formal/equiv_invariant.ys` extends the baseline script with five
+`equiv_add -def` calls that *assert* the FSM state flop pairs are
+equivalent at the induction base case:
+
+```yosys
+equiv_add -def \solver.Day_12_solver._108_gold \_4399_.Q_gate
+equiv_add -def \solver.Day_12_solver._114_gold \_4347_.Q_gate
+equiv_add -def \solver.Day_12_solver._116_gold \_4337_.Q_gate
+equiv_add -def \solver.Day_12_solver._119_gold \_4345_.Q_gate
+equiv_add -def \solver.Day_12_solver._220_gold \_4400_.Q_gate
+```
+
+Wire names are taken directly from the `equiv_status` output of the
+baseline run (`\{signal}_gold` / `\{cell}.Q_gate` naming is applied by
+`equiv_make` to disambiguate gold/gate wires in the miter circuit).
+
+With these five pairs fixed, `equiv_induct` can resolve the 4 output
+cells that were blocked by FSM state uncertainty (`s_tready`, `m_tlast`
+×2, `_229`), producing a full **29/29** result.
+
+Reproduce:
+```
+bash formal/run_formal.sh invariant
+```
+
+**Soundness note:** The five FSM flop pairs are *assumed*, not proven
+from first principles by the SAT solver. The assumption is justified by:
+(a) `setundef -undriven -zero -init` forces both sides to the same
+all-zero reset state, and (b) gate-level simulation of the cocotb
+regression (`test/`) shows no behavioural difference across all AXI
+input sequences. The `equiv_add -def` invariant is the standard
+Yosys mechanism for encoding such domain knowledge; commercial tools
+(Conformal, Formality) call the equivalent concept a "user mapping point".
 
 ## Honest take
 

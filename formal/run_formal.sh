@@ -3,7 +3,7 @@
 # Proves: src/project.v (behavioral RTL) is logically equivalent to the
 # sky130-mapped post-synth netlists produced by LibreLane.
 #
-# Usage: bash formal/run_formal.sh [baseline|aggressive|both]
+# Usage: bash formal/run_formal.sh [baseline|aggressive|both|invariant]
 
 set -euo pipefail
 
@@ -31,6 +31,8 @@ prep_one() {
 run_one() {
   local tag="$1"
   local script="formal/equiv_${tag}.ys"
+  # invariant run uses a dedicated script name but baseline netlist
+  [ "$tag" = "invariant" ] && script="formal/equiv_invariant.ys"
   local log="formal/equiv_${tag}.log"
   echo "================================"
   echo "equiv ${tag} -> ${log}"
@@ -50,5 +52,6 @@ case "$WHICH" in
   aggressive) prep_one aggressive; run_one aggressive ;;
   both)       prep_one baseline;   run_one baseline
               prep_one aggressive; run_one aggressive ;;
-  *) echo "usage: $0 [baseline|aggressive|both]"; exit 1 ;;
+  invariant)  prep_one baseline;   run_one invariant ;;
+  *) echo "usage: $0 [baseline|aggressive|both|invariant]"; exit 1 ;;
 esac
