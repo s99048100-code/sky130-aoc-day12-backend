@@ -57,5 +57,10 @@ runs/**
 !runs/aggressive/final/gds/*.gds
 !runs/aggressive/final/klayout_gds/
 !runs/aggressive/final/klayout_gds/*.gds
+!runs/aggressive/final/nl/
+!runs/aggressive/final/nl/*.v
 
 tt/
+
+formal/work_*/
+formal/nl_*_clean.v

@@ -16,6 +16,11 @@ What this repo adds is:
   (`runs/aggressive/`) and a side-by-side PPA diff
   (`compare_ppa.py` → [`ppa_compare.md`](ppa_compare.md)) that shows
   what actually breaks when you push the clock,
+- a Yosys sequential-equivalence check (`formal/`, `equiv_*.ys`) that
+  compares `src/project.v` to both LibreLane post-synth netlists
+  (50 MHz and 100 MHz) — see [`formal/README.md`](formal/README.md) for
+  the partial-proof result and why memory-backed FSMs defeat yosys
+  `equiv_induct` without manual invariants,
 - notes on the RTL → GDSII flow and the HW/SW equivalence argument.
 
 ## Algorithm
@@ -173,6 +178,7 @@ src/aggressive_config.json   100 MHz / 80 % density override
 test/                   cocotb testbench
 runs/wokwi/             baseline 50 MHz LibreLane outputs (keepers only)
 runs/aggressive/        100 MHz re-run (same keepers, different knobs)
+formal/                 Yosys equivalence (project.v vs post-synth nl.v)
   flow.log
   resolved.json
   final/metrics.json

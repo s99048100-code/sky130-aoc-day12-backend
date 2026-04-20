@@ -1,0 +1,29 @@
+# Yosys equivalence: RTL (project.v) vs sky130-mapped post-synth netlist (baseline 50 MHz).
+
+read_verilog -sv /work/src/project.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+memory_collect
+opt -full
+design -stash gold
+
+read_liberty -lib /pdk/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+read_verilog /work/formal/nl_baseline_clean.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+opt -full
+design -stash gate
+
+design -copy-from gold  -as gold tt_um_range_finder
+design -copy-from gate  -as gate tt_um_range_finder
+
+equiv_make gold gate equiv
+hierarchy -top equiv
+setundef -undriven -zero
+opt_clean
+
+equiv_simple -seq 5
+equiv_induct -seq 40
+equiv_status

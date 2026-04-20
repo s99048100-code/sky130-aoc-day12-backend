@@ -1,0 +1,33 @@
+# Yosys equivalence: RTL (project.v) vs sky130-mapped post-synth netlist.
+# Runs inside the LibreLane Docker (yosys 0.46 + sky130A PDK mounted at /pdk).
+
+# --- gold: behavioral RTL ---
+read_verilog -sv /work/src/project.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+memory_collect
+opt -full
+design -stash gold
+
+# --- gate: post-synth netlist with sky130 behavioral cells ---
+read_liberty -lib /pdk/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+read_verilog /work/formal/nl_aggressive_clean.v
+hierarchy -check -top tt_um_range_finder
+proc
+flatten
+opt -full
+design -stash gate
+
+# --- miter + prove ---
+design -copy-from gold  -as gold tt_um_range_finder
+design -copy-from gate  -as gate tt_um_range_finder
+
+equiv_make gold gate equiv
+hierarchy -top equiv
+setundef -undriven -zero
+opt_clean
+
+equiv_simple -seq 5
+equiv_induct -seq 40
+equiv_status
