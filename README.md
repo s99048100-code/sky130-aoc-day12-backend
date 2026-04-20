@@ -197,18 +197,6 @@ rings, the full 4×2 Tiny Tapeout tile footprint):
 A high-res render produced by the Tiny Tapeout flow lives at
 [`gds_render.png`](gds_render.png).
 
-### 3D model
-
-The GDS is converted to glTF with [GDS2glTF] and viewed in a tiny static
-server (`D:/aoc_tapeout/start_3d_viewer.bat` on my machine; opens
-`http://localhost:8765/viewer_3d.html`). The `.gltf` is ~66 MB so it is
-not committed; regenerate locally with:
-
-```
-python GDS2glTF/gds2gltf.py runs/wokwi/final/gds/tt_um_range_finder.gds
-```
-
-[GDS2glTF]: https://github.com/mbalestrini/GDS2glTF
 
 ## Repo Layout
 
