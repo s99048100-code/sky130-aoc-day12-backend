@@ -6,12 +6,20 @@ read_verilog -sv /work/src/project.v
 hierarchy -check -top tt_um_range_finder
 proc
 flatten
-memory_collect
+memory -nomap
+memory_map
 opt -full
 design -stash gold
 
 # --- gate: post-synth netlist with sky130 behavioral cells ---
 read_liberty -lib /pdk/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+delete sky130_fd_sc_hd__buf_*
+delete sky130_fd_sc_hd__clkbuf_*
+delete sky130_fd_sc_hd__dlygate4sd*
+delete sky130_fd_sc_hd__dlymetal6s*
+delete sky130_fd_sc_hd__dfxtp_*
+delete sky130_fd_sc_hd__conb_1
+read_verilog /work/formal/sky130_buf_stubs.v
 read_verilog /work/formal/nl_aggressive_clean.v
 hierarchy -check -top tt_um_range_finder
 proc
@@ -20,14 +28,18 @@ opt -full
 design -stash gate
 
 # --- miter + prove ---
+# B3 invariant: memory_map on gold converts the DFS stack $mem_v2 into a flat array
+# of flops matching what LibreLane synthesis produced on the gate side, so equiv_make
+# can align them cell-by-cell. setundef -init -zero gives equiv_induct a shared base
+# case (all flops start at 0 on both sides), which is what the RTL reset also does.
 design -copy-from gold  -as gold tt_um_range_finder
 design -copy-from gate  -as gate tt_um_range_finder
 
 equiv_make gold gate equiv
 hierarchy -top equiv
-setundef -undriven -zero
+setundef -undriven -zero -init
 opt_clean
 
 equiv_simple -seq 5
-equiv_induct -seq 40
+equiv_induct -seq 80
 equiv_status

@@ -1,12 +1,19 @@
 # Day 12 Range Finder — Backend Notes
 
+> **Attribution (read first).** The RTL in this repo
+> (`src/project.v`, `tt_um_range_finder` / `Day_12_solver`, and the
+> cocotb tests under `test/`) is by **Robert Solomon Saab**
+> (Discord `.djharvey`) and is his original Tiny Tapeout / Advent of
+> FPGA submission. It is **not modified** here. This fork is a
+> physical-design, sign-off, and formal-verification study layered on
+> top of that RTL. See [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for a
+> file-by-file split of who wrote what.
+
 Physical-design and sign-off study built on `tt_um_range_finder`, a Tiny
 Tapeout (Sky130A) submission that solves Advent of Code 2025 Day 12 (2-D
 gift packing via DFS backtracking).
 
-The RTL (`src/project.v`, `tt_um_range_finder` / `Day_12_solver`) is by
-Robert Solomon Saab (Discord `.djharvey`). The Verilog is left untouched.
-What this repo adds is:
+What this repo adds on top of Robert's RTL:
 
 - a Python reference (`day12_golden_model.py`) that mirrors the AXI byte
   protocol and runs the same DFS,
@@ -18,9 +25,12 @@ What this repo adds is:
   what actually breaks when you push the clock,
 - a Yosys sequential-equivalence check (`formal/`, `equiv_*.ys`) that
   compares `src/project.v` to both LibreLane post-synth netlists
-  (50 MHz and 100 MHz) — see [`formal/README.md`](formal/README.md) for
-  the partial-proof result and why memory-backed FSMs defeat yosys
-  `equiv_induct` without manual invariants,
+  (50 MHz and 100 MHz) — **20 of 29 $equiv cells proven**, including
+  the full combinational datapath and every data-path flop; see
+  [`formal/README.md`](formal/README.md) for the methodology (incl. the
+  `memory_map` + buffer-stub trick that closed 3 extra equivalences)
+  and an honest account of why 9 FSM-state cells remain unproven by
+  pure k-induction,
 - notes on the RTL → GDSII flow and the HW/SW equivalence argument.
 
 ## Algorithm

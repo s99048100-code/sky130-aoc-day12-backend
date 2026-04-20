@@ -16,6 +16,10 @@ equiv_baseline.log     stdout from yosys run (baseline)
 equiv_aggressive.log   stdout from yosys run (aggressive)
 strip_fillers.py       strips sky130_ef_sc_hd__decap / fill / tap / diode cells
                        from the final netlist (pure physical, no logic ports)
+sky130_buf_stubs.v     behavioural stubs for buffer / clkbuf / delay / dfxtp /
+                       conb cells that `read_liberty -lib` only loads as
+                       blackbox — needed so equiv_induct can propagate SAT
+                       through the timing-repair buffers LibreLane inserts
 run_formal.sh          wrapper — runs both checks inside the LibreLane Docker
 ```
 
@@ -44,20 +48,28 @@ The script:
 
 ```
 read_verilog -sv project.v         → gold
-proc; flatten; memory_collect      (resolve processes, inline solver submodule,
-                                    keep memory primitives)
+proc; flatten                       (resolve processes, inline solver submodule)
+memory -nomap; memory_map           (flatten $mem_v2 DFS stack into a flop array
+                                    so the gate side, which already has the
+                                    stack as individual flops, aligns cell-wise)
 opt -full
 design -stash gold
 
-read_liberty -lib ...__tt_025C_1v80.lib    → cell interfaces with SAT models
+read_liberty -lib ...__tt_025C_1v80.lib    → cell interfaces (blackbox)
+delete sky130_fd_sc_hd__{buf,clkbuf,dlygate,dlymetal,dfxtp,conb}*
+read_verilog sky130_buf_stubs.v            → whitebox identity / flop models for
+                                              the cells liberty loads as blackbox
+                                              (buffers have no SAT model otherwise)
 read_verilog <cleaned nl.v>                → gate
 proc; flatten; opt -full
 design -stash gate
 
 equiv_make gold gate equiv         (miter: (gold.out == gate.out) for each port)
-setundef -undriven -zero           (force uninitialized nets to 0 on gold)
+setundef -undriven -zero -init     (force uninit nets and initial flop values
+                                    to 0 on both sides so induction has a
+                                    consistent base case that matches hw reset)
 equiv_simple -seq 5                (combinational pass + short BMC)
-equiv_induct -seq 40               (k-induction up to depth 40)
+equiv_induct -seq 80               (k-induction up to depth 80)
 equiv_status                       (reports proven vs unproven $equiv cells)
 ```
 
@@ -66,42 +78,73 @@ equiv_status                       (reports proven vs unproven $equiv cells)
 Both runs produce identical partial-proof results:
 
 ```
-Found 30 $equiv cells in equiv:
-  Of those cells 17 are proven and 13 are unproven.
+Found 29 $equiv cells in equiv:
+  Of those cells 20 are proven and 9 are unproven.
 ```
 
-**17 of 30 equivalence obligations are formally proven.** These cover
-the combinational datapath: byte-count register, grid bookkeeping, piece
-pointer arithmetic, and the AXI `m_tdata`/`m_tvalid` output.
+**20 of 29 equivalence obligations are formally proven.** These cover
+the full combinational datapath (byte-count register, grid bookkeeping,
+piece-pointer arithmetic, `m_tdata`, `m_tvalid`) plus every flop on the
+datapath whose next-state logic is a pure function of inputs and
+already-proven state — the whole AXI `m_tdata` pipeline, the piece
+counters `c0..c5`, and the width/height registers all close.
 
-**13 are unproven by k-induction**, all reachable only through the DFS
-stack memory (`_786_` in `Day_12_solver`, reported as
-`$mem_v2 — No SAT model available`) or through FSM reset sequencing:
+**9 are unproven by k-induction**, all driven by FSM state registers
+that live inside `Day_12_solver`:
 
-- `s_tready`, `m_tlast` — AXI protocol signals gated by the RX/TX FSM
-- `Day_12_solver._108/_114/_116/_119/_227/_220/_229` — stack-pointer and
-  FSM-state flops whose value at step 0 depends on reset ordering that
-  the mitering flow does not model consistently between gold and gate.
+- `s_tready`, `m_tlast`, `Day_12_solver._229` — AXI handshake outputs
+  gated by the RX/TX FSM. Gate side reads as constant 0 under the
+  induction step assumption; gold side has non-constant logic.
+- `Day_12_solver._108/_114/_116/_119/_220` — stack-pointer / FSM-state
+  flops matched by name to the corresponding gate flops
+  (`_4399_/_4347_/_4337_/_4345_/_4400_`) but not provable without a
+  stronger inductive invariant.
 
 Why k-induction struggles: the DFS stack is a ~1 k-bit memory array.
-Yosys `equiv_induct` models memory as an array of flops but does not
-build an inductive invariant relating gold-memory contents to
-gate-memory contents — so on every induction step it has to assume
-arbitrary memory contents that differ between the two sides, which
-makes step-0 mismatch propagate indefinitely.
+`memory_map` now flattens it to discrete flops on the gold side, which
+lets `equiv_make` align cells by name, but `equiv_induct` still has to
+assume arbitrary stack contents at the induction base case. Without a
+manual invariant asserting that the gold stack and gate stack agree
+cell-by-cell at step 0, spurious divergence in the stack propagates
+into the FSM state read-outs and blocks the induction step.
+
+## B3 invariant attempt — what we tried
+
+Started from a 17/30 baseline. Three changes moved the needle to 20/29:
+
+1. **`memory -nomap; memory_map` on gold** — converts the `$mem_v2`
+   stack into a flop array that structurally matches the post-synth
+   netlist. Removed the `$mem_v2 — No SAT model available` error class.
+2. **Behavioural stubs for buffer / delay / flop / tie cells
+   (`sky130_buf_stubs.v`)** — `read_liberty -lib` loads these as
+   blackbox with no SAT model, so `equiv_induct` couldn't propagate
+   through the timing-repair buffer chains LibreLane inserts between
+   the FSM and the output pads. Supplying `assign X = A;` identity
+   stubs (and a flop-behaviour stub for `dfxtp_*`) unblocked the path
+   from FSM output to AXI pin, which is what closed the 3 extra
+   equivalences.
+3. **`setundef -undriven -zero -init`** — forces both sides to the same
+   all-zero initial state, matching the hardware reset.
+
+The remaining 9 need a stronger invariant than `memory_map` alone can
+provide — in particular, a user-supplied assumption that the FSM state
+on the gold and gate sides enter the same state coming out of reset.
 
 ## Honest take
 
-This is a clean, **partial** formal result. The fully general proof
-(all 30 cells, including the stack memory) would require either:
+This is a clean **partial** result: the full combinational datapath
+and every data-path flop is formally equivalent, but the FSM state
+registers remain unproven by pure k-induction. The fully general
+proof (all 29 cells) would require either:
 
-- writing a manual invariant that equates gold-stack[i] and
-  gate-stack[i] and feeds it to `equiv_induct` as an assumption; or
-- running a bounded model check (`sby` with `mode bmc`, depth ≈ 200+)
-  over a fixed-size input and showing I/O equivalence for that trace —
-  which is essentially what gate-level simulation of the cocotb
-  regression in `test/` already does, and is functionally (not
-  formally) confirmed by the sign-off timing runs.
+- writing a manual `equiv_add` / `assume` that equates the gold and
+  gate FSM state one-hot encoding at step 0 and feeding it to
+  `equiv_induct` as an invariant; or
+- running a bounded model check (`sby` mode bmc, depth ≈ 200+) over a
+  fixed-size input and showing I/O equivalence for that trace —
+  essentially what gate-level simulation of the cocotb regression in
+  `test/` already does, and what the sign-off timing runs functionally
+  (not formally) confirm.
 
 For a tape-out-scale design I'd use a commercial equivalence checker
 (Cadence Conformal, Synopsys Formality) — those maintain per-state
