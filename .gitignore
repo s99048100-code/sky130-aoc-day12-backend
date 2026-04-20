@@ -45,5 +45,17 @@ runs/**
 !runs/wokwi/final/gds/*.gds
 !runs/wokwi/final/klayout_gds/
 !runs/wokwi/final/klayout_gds/*.gds
+!runs/aggressive/
+!runs/aggressive/flow.log
+!runs/aggressive/warning.log
+!runs/aggressive/error.log
+!runs/aggressive/resolved.json
+!runs/aggressive/final/
+!runs/aggressive/final/metrics.json
+!runs/aggressive/final/metrics.csv
+!runs/aggressive/final/gds/
+!runs/aggressive/final/gds/*.gds
+!runs/aggressive/final/klayout_gds/
+!runs/aggressive/final/klayout_gds/*.gds
 
 tt/

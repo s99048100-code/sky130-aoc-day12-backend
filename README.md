@@ -10,8 +10,12 @@ What this repo adds is:
 
 - a Python reference (`day12_golden_model.py`) that mirrors the AXI byte
   protocol and runs the same DFS,
-- a small scraper (`extract_ppa.py`) that turns OpenLane's `metrics.json`
-  into a markdown PPA table,
+- a small scraper (`extract_ppa.py`) that turns LibreLane's
+  `metrics.json` into a markdown PPA table,
+- a second LibreLane re-run at 100 MHz / 80 % density
+  (`runs/aggressive/`) and a side-by-side PPA diff
+  (`compare_ppa.py` → [`ppa_compare.md`](ppa_compare.md)) that shows
+  what actually breaks when you push the clock,
 - notes on the RTL → GDSII flow and the HW/SW equivalence argument.
 
 ## Algorithm
@@ -69,9 +73,9 @@ case. Diff that against the cocotb logs in `test/`.
 
 ## Sign-off Numbers
 
-Sky130A, OpenLane, 10 MHz target. Pulled from
-`runs/wokwi/final/metrics.json` by `extract_ppa.py`; long version is in
-[`ppa_report.md`](ppa_report.md).
+Sky130A, LibreLane 2.4.2, 50 MHz target (`CLOCK_PERIOD=20`). Pulled
+from `runs/wokwi/final/metrics.json` by `extract_ppa.py`; long version
+is in [`ppa_report.md`](ppa_report.md).
 
 | Class    | Metric                              | Value               |
 |----------|-------------------------------------|---------------------|
@@ -92,6 +96,46 @@ Sky130A, OpenLane, 10 MHz target. Pulled from
 
 All TT/SS/FF corners close with zero setup/hold violations after CTS and
 post-route timing repair.
+
+## Re-running the Flow at 100 MHz
+
+The baseline targets 50 MHz and closes with +11.23 ns of setup slack at
+TT — that is a lot of room left on the table. To see where this RTL
+actually breaks, I re-ran the flow with two knobs changed:
+
+| Knob | Baseline (`runs/wokwi`) | Aggressive (`runs/aggressive`) |
+|------|-------------------------|--------------------------------|
+| `CLOCK_PERIOD`         | 20 ns (50 MHz) | 10 ns (100 MHz) |
+| `PL_TARGET_DENSITY_PCT`| 60             | 80              |
+
+Both runs use the same RTL, the same Sky130A PDK, the same LibreLane
+2.4.2 flow, and the same Tiny Tapeout 4×2 die. Headline numbers:
+
+|              | Baseline (50 MHz) | Aggressive (100 MHz) |
+|--------------|------------------:|---------------------:|
+| Std-cell area    | 41,906 µm²    | 42,621 µm² (+1.7 %) |
+| Wirelength       | 114,152 µm    | 126,073 µm (+10.4 %) |
+| Setup WS @ TT    | +11.23 ns     | +1.95 ns             |
+| Setup WS @ SS slow| +2.33 ns     | **−5.47 ns** (fail)  |
+| Setup violations @ TT | 0        | **1,571**            |
+| Total power @ TT | 2.60 mW       | 5.03 mW (+93 %)      |
+| Magic / LVS      | PASS / PASS   | PASS / PASS          |
+
+Reading the table: at the typical (TT) corner the design *almost*
+holds 100 MHz — only 1.95 ns of setup margin and 1.5 k violations the
+timing-repair pass couldn't kill. At the slow (SS, 100 °C, 1.60 V)
+corner setup slack flips negative, so this would not actually tape out
+at 100 MHz without RTL changes (pipeline the FSM, register the byte
+interface). Power roughly doubles because every flop toggles twice as
+often.
+
+Full table with hold corners and per-buffer-class deltas in
+[`ppa_compare.md`](ppa_compare.md). Reproduce with:
+
+```
+librelane --dockerized --run-tag aggressive src/aggressive_config.json
+python compare_ppa.py
+```
 
 ## Layout
 
@@ -125,18 +169,22 @@ python GDS2glTF/gds2gltf.py runs/wokwi/final/gds/tt_um_range_finder.gds
 
 ```
 src/                    RTL (Robert) — untouched
+src/aggressive_config.json   100 MHz / 80 % density override
 test/                   cocotb testbench
-runs/wokwi/             OpenLane outputs (only the keepers — see .gitignore)
+runs/wokwi/             baseline 50 MHz LibreLane outputs (keepers only)
+runs/aggressive/        100 MHz re-run (same keepers, different knobs)
   flow.log
   resolved.json
   final/metrics.json
   final/metrics.csv
   final/gds/*.gds
   final/klayout_gds/*.gds
-docs/                   info.md + KLayout screenshot
+docs/                   KLayout screenshots
 day12_golden_model.py   Python reference
 extract_ppa.py          metrics.json → ppa_report.md
+compare_ppa.py          baseline vs aggressive → ppa_compare.md
 ppa_report.md
+ppa_compare.md
 info.yaml               Tiny Tapeout descriptor
 ```
 
