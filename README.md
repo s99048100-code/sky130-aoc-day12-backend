@@ -37,6 +37,12 @@ What this repo adds on top of Robert's RTL:
 
 ## Algorithm
 
+### Problem
+
+Given a W×H grid and up to 6 types of gift shapes, determine whether all
+the requested gifts can be placed on the grid without any cell overlap.
+Gifts may not be rotated or flipped — the shapes are fixed.
+
 Eight bytes in over an AXI-Stream-like channel:
 
 ```
@@ -47,9 +53,49 @@ byte[2..7] = c0..c5    ; how many of gift shape #0..#5 to pack
 
 One byte back: `1` if solvable, `0` otherwise.
 
-The hardware flattens the recursion stack into an FSM. The Python model
-runs the same algorithm as a plain recursive function. The two are
-I/O-equivalent.
+### Gift Shapes
+
+Six shapes are hardcoded (from `GIFT_SHAPES` in `day12_golden_model.py`,
+mirrored in a lookup table inside `Day_12_solver`):
+
+```
+Shape 0 (14 cells)   Shape 1 (8 cells)    Shape 2 (5 cells)
+####                 ###                  ###
+####                 # #                   #
+####                 ###                   #
+#  #
+
+Shape 3 (6 cells)    Shape 4 (6 cells)    Shape 5 (6 cells)
+####                 ##                   ###
+#  #                 ##                   ###
+                     ##
+```
+
+### Search
+
+The solver uses backtracking DFS. Expanding the counts into an ordered
+piece list (e.g. `c0=1, c2=2` → `[0, 2, 2]`), it processes pieces one
+at a time:
+
+1. **PICK** — take the next unplaced piece.
+2. **TRY / CHECK** — scan every valid (x, y) anchor position for that
+   piece's bounding box. For each candidate, check whether every cell
+   of the shape is inside the grid and unoccupied.
+3. **PLACE** — if it fits, mark those cells and recurse to step 1 with
+   the next piece.
+4. **NEXT / POP** — if no position works, undo the last placement and
+   resume the parent's position scan (backtrack). If the stack is empty,
+   the puzzle has no solution.
+5. **DONE_OK** — all pieces placed; return 1.
+6. **DONE_FAIL** — exhausted all possibilities; return 0.
+
+A quick feasibility check prunes impossible inputs before the search
+starts: if the total cell count of all requested pieces exceeds W×H,
+the answer is immediately 0.
+
+The hardware flattens this recursion into an explicit FSM. The Python model
+(`day12_golden_model.py`) runs the identical algorithm as a plain recursive
+function. The two are I/O-equivalent.
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables': {'darkMode':true, 'background':'#000000', 'primaryColor':'#1e293b', 'primaryTextColor':'#f8fafc', 'primaryBorderColor':'#94a3b8', 'lineColor':'#cbd5e1', 'mainBkg':'#1e293b'}}}%%
