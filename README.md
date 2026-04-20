@@ -31,6 +31,7 @@ runs the same algorithm as a plain recursive function. The two are
 I/O-equivalent.
 
 ```mermaid
+%%{init: {'theme':'dark', 'themeVariables': {'darkMode':true, 'background':'#000000', 'primaryColor':'#1e293b', 'primaryTextColor':'#f8fafc', 'primaryBorderColor':'#94a3b8', 'lineColor':'#cbd5e1', 'mainBkg':'#1e293b'}}}%%
 stateDiagram-v2
     [*] --> RX
     RX --> INIT       : 8 bytes received
@@ -94,11 +95,31 @@ post-route timing repair.
 
 ## Layout
 
-![tt_um_range_finder layout](docs/klayout_layout.png)
+KLayout streamout of the final GDS
+(`runs/wokwi/final/klayout_gds/tt_um_range_finder.klayout.gds`).
 
-KLayout screenshot of the final GDS
-(`runs/wokwi/final/klayout_gds/tt_um_range_finder.klayout.gds`). Drop the
-PNG at `docs/klayout_layout.png` if it is missing.
+![tt_um_range_finder — KLayout layout](docs/klayout_layout.png)
+
+Same die dropped into the Caravel-style frame for context (pads, power
+rings, the full 4×2 Tiny Tapeout tile footprint):
+
+![tt_um_range_finder — Caravel-style context](docs/klayout_caravel_context.png)
+
+A high-res render produced by the Tiny Tapeout flow lives at
+[`gds_render.png`](gds_render.png).
+
+### 3D model
+
+The GDS is converted to glTF with [GDS2glTF] and viewed in a tiny static
+server (`D:/aoc_tapeout/start_3d_viewer.bat` on my machine; opens
+`http://localhost:8765/viewer_3d.html`). The `.gltf` is ~66 MB so it is
+not committed; regenerate locally with:
+
+```
+python GDS2glTF/gds2gltf.py runs/wokwi/final/gds/tt_um_range_finder.gds
+```
+
+[GDS2glTF]: https://github.com/mbalestrini/GDS2glTF
 
 ## Repo Layout
 
