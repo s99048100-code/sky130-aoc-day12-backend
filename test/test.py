@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # 13-case regression suite mirroring REGRESSION_CASES in
-# day12_golden_model.py. Each (W, H, counts, expected) is run end-to-end
-# through the AXI byte handshake and compared against the Python golden
-# result. Test passes iff all 13 cases match.
+# day12_golden_model.py. Each case is a separate @cocotb.test() so the
+# JUnit results.xml reports per-case PASS/FAIL.
 
 import cocotb
 from cocotb.clock import Clock
@@ -12,20 +11,20 @@ from cocotb.triggers import ClockCycles, RisingEdge
 
 
 REGRESSION_CASES = [
-    # (W, H, counts,                    expected_solvable)
-    (4,  4,  [1, 0, 0, 0, 0, 0],        1),
-    (4,  4,  [1, 1, 0, 0, 0, 0],        0),
-    (4,  4,  [1, 0, 1, 0, 0, 0],        0),
-    (4,  4,  [1, 0, 0, 0, 1, 0],        0),
-    (4,  4,  [0, 1, 0, 1, 0, 0],        0),
-    (5,  5,  [2, 0, 0, 0, 0, 0],        0),
-    (6,  5,  [2, 0, 0, 0, 0, 0],        0),
-    (8,  4,  [1, 1, 0, 0, 0, 0],        1),
-    (6,  6,  [1, 1, 0, 0, 0, 0],        0),
-    (8,  8,  [1, 1, 1, 1, 1, 1],        1),
-    (10, 10, [1, 1, 1, 1, 1, 1],        1),
-    (8,  8,  [2, 2, 2, 2, 0, 0],        0),
-    (12, 12, [2, 2, 2, 2, 2, 2],        1),
+    # (W, H, counts,                    expected_solvable, max_cycles)
+    (4,  4,  [1, 0, 0, 0, 0, 0],        1,  20000),
+    (4,  4,  [1, 1, 0, 0, 0, 0],        0,  20000),
+    (4,  4,  [1, 0, 1, 0, 0, 0],        0,  20000),
+    (4,  4,  [1, 0, 0, 0, 1, 0],        0,  20000),
+    (4,  4,  [0, 1, 0, 1, 0, 0],        0,  20000),
+    (5,  5,  [2, 0, 0, 0, 0, 0],        0,  20000),
+    (6,  5,  [2, 0, 0, 0, 0, 0],        0,  30000),
+    (8,  4,  [1, 1, 0, 0, 0, 0],        1,  30000),
+    (6,  6,  [1, 1, 0, 0, 0, 0],        0,  50000),
+    (8,  8,  [1, 1, 1, 1, 1, 1],        1,  80000),
+    (10, 10, [1, 1, 1, 1, 1, 1],        1, 100000),
+    (8,  8,  [2, 2, 2, 2, 0, 0],        0,  80000),
+    (12, 12, [2, 2, 2, 2, 2, 2],        1, 300000),
 ]
 
 
@@ -53,58 +52,41 @@ async def reset(dut):
     await ClockCycles(dut.clk, 3)
 
 
-async def run_case(dut, w, h, counts, max_cycles=200000):
+async def run_case(dut, w, h, counts, expected, max_cycles):
+    cocotb.start_soon(Clock(dut.clk, 10, unit="us").start())
     await reset(dut)
+
     await send_word(dut, w)
     await send_word(dut, h)
     for c in counts:
         await send_word(dut, c)
+
     dut.uio_in.value = 2  # m_tready high
     cycles = 0
     while dut.uio_out.value[3] == 0:
         await RisingEdge(dut.clk)
         cycles += 1
         if cycles > max_cycles:
-            raise RuntimeError(f"Timeout: solver did not produce result in {max_cycles} cycles")
-    return int(dut.uo_out.value), cycles
+            raise RuntimeError(
+                f"Solver did not produce result in {max_cycles} cycles "
+                f"({w}x{h} counts={counts})"
+            )
 
-
-@cocotb.test()
-async def test_regression_13(dut):
-    """Run the full 13-case golden regression and assert HW == SW for all."""
-    cocotb.start_soon(Clock(dut.clk, 10, unit="us").start())
-
-    dut._log.info("=" * 60)
-    dut._log.info("Day 12 Range Finder — 13-case cocotb regression")
-    dut._log.info("=" * 60)
-
-    results = []
-    failures = []
-
-    for idx, (w, h, counts, expected) in enumerate(REGRESSION_CASES):
-        dut._log.info(f"[{idx:2d}] {w}x{h} counts={counts}  expected={expected}")
-        result, cycles = await run_case(dut, w, h, counts)
-        ok = (result == expected)
-        tag = "PASS" if ok else "FAIL"
-        dut._log.info(f"     -> got={result} cycles={cycles}  {tag}")
-        results.append((idx, w, h, counts, expected, result, cycles, ok))
-        if not ok:
-            failures.append((idx, expected, result))
-
-    dut._log.info("=" * 60)
-    dut._log.info("SUMMARY")
-    dut._log.info("=" * 60)
-    for idx, w, h, counts, expected, result, cycles, ok in results:
-        tag = "PASS" if ok else "FAIL"
-        dut._log.info(
-            f"  [{idx:2d}] {w:>2}x{h:<2} {str(counts):<22} "
-            f"exp={expected} got={result} cyc={cycles:>6}  {tag}"
-        )
-    pass_count = sum(1 for r in results if r[7])
-    dut._log.info(f"Total: {pass_count}/{len(results)} PASS")
-
-    assert not failures, (
-        f"{len(failures)} case(s) failed: "
-        + ", ".join(f"#{i}(exp={e},got={g})" for i, e, g in failures)
+    result = int(dut.uo_out.value)
+    dut._log.info(
+        f"{w}x{h} counts={counts} expected={expected} got={result} cycles={cycles}"
     )
-    dut._log.info("All 13 cases passed!")
+    assert result == expected, (
+        f"{w}x{h} counts={counts}: expected {expected}, got {result}"
+    )
+
+
+def _make_test(idx, w, h, counts, expected, max_cycles):
+    @cocotb.test(name=f"case_{idx:02d}_{w}x{h}_exp{expected}")
+    async def _t(dut):
+        await run_case(dut, w, h, counts, expected, max_cycles)
+    return _t
+
+
+for _idx, (_w, _h, _counts, _exp, _mc) in enumerate(REGRESSION_CASES):
+    globals()[f"test_case_{_idx:02d}"] = _make_test(_idx, _w, _h, _counts, _exp, _mc)
