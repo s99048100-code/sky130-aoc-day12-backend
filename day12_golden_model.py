@@ -117,40 +117,35 @@ def run_case(W: int, H: int, counts: List[int]) -> dict:
 
 
 def hardware_alignment_report() -> str:
-    return (
-        "=== Hardware Alignment ===\n"
-        "Verilog DUT: tt_um_range_finder (top), Day_12_solver (core)\n"
-        "Interface: AXI-Stream-like 8-bit byte channel\n"
-        "  Input  bytes: [W, H, c0, c1, c2, c3, c4, c5]\n"
-        "  Output byte : 1 = SOLVABLE, 0 = UNSOLVABLE\n"
-        "Handshake:\n"
-        "  ui[0]=s_tvalid, uio[0]=s_tready  (input  channel)\n"
-        "  uio[1]=m_tvalid, ui[1]=m_tready, uio[2]=m_tlast (output channel)\n"
-        "  ui[7:2] + ui[1:0] form s_tdata[7:0] (see info.yaml)\n"
-        "Algorithm equivalence:\n"
-        "  HW: hardware FSM emulates DFS via stack-unfolded backtracking\n"
-        "  SW: this script runs the same DFS recursion in Python\n"
-        "Verification flow:\n"
-        "  1. Generate test vectors as byte sequences\n"
-        "  2. Stream into Verilog DUT through cocotb (test/test.py)\n"
-        "  3. Compare DUT output byte vs solve() return value\n"
-        "  4. PASS iff hardware result == software result for all cases\n"
-    )
+    return "=== Hardware Alignment — see README §HW vs SW for interface details ==="
 
 
 REGRESSION_CASES = [
+    # Minimal solvable: shape 0 only (14 cells) in 4×4 (16 cells)
     (4, 4, [1, 0, 0, 0, 0, 0]),
+    # Area pruning: S0+S1=22 > 16 → immediate NO-SOL without search
     (4, 4, [1, 1, 0, 0, 0, 0]),
+    # Area pruning: S0+S2=19 > 16 → immediate NO-SOL
     (4, 4, [1, 0, 1, 0, 0, 0]),
+    # Area pruning: S0+S4=20 > 16 → immediate NO-SOL
     (4, 4, [1, 0, 0, 0, 1, 0]),
+    # Geometry infeasible: S1+S3=14 ≤ 16 but shapes cannot pack into 4×4 (NO-SOL)
     (4, 4, [0, 1, 0, 1, 0, 0]),
+    # Area pruning: 2×S0=28 > 25 → immediate NO-SOL in 5×5
     (5, 5, [2, 0, 0, 0, 0, 0]),
+    # Geometry infeasible: 2×S0 in 6×5 (28 ≤ 30); SW=NO-SOL but DUT=SOLVABLE (excluded from HW regression — see verification_notes.md)
     (6, 5, [2, 0, 0, 0, 0, 0]),
+    # S0+S1 in wide 8×4 grid (22 ≤ 32); different aspect ratio challenge
     (8, 4, [1, 1, 0, 0, 0, 0]),
+    # S0+S1 in 6×6 (22 ≤ 36); NOTE: DUT disagrees with SW — see verification_notes.md
     (6, 6, [1, 1, 0, 0, 0, 0]),
+    # All 6 shapes in 8×8 (45 ≤ 64); NOTE: DUT disagrees with SW — see verification_notes.md
     (8, 8, [1, 1, 1, 1, 1, 1]),
+    # All 6 shapes in 10×10 (45 ≤ 100); large-grid stress test, deepest search
     (10, 10, [1, 1, 1, 1, 1, 1]),
+    # Area pruning: S0×2+S1×2+S2×2+S3×2=66 > 64 → immediate NO-SOL in 8×8
     (8, 8, [2, 2, 2, 2, 0, 0]),
+    # Max density: all 6 shapes ×2 in 12×12; worst-case search, ~90 cells placed
     (12, 12, [2, 2, 2, 2, 2, 2]),
 ]
 

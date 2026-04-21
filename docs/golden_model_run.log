@@ -1,0 +1,26 @@
+=== Hardware Alignment -- see README §HW vs SW for interface details ===
+=== Regression Suite (Python Golden Model) ===
+idx     WxH counts                   AXI bytes                         result      nodes
+------------------------------------------------------------------------------------------
+  0   4x4   [1, 0, 0, 0, 0, 0]       [4, 4, 1, 0, 0, 0, 0, 0]         SOLVABLE          2
+  1   4x4   [1, 1, 0, 0, 0, 0]       [4, 4, 1, 1, 0, 0, 0, 0]         NO-SOL            0
+  2   4x4   [1, 0, 1, 0, 0, 0]       [4, 4, 1, 0, 1, 0, 0, 0]         NO-SOL            0
+  3   4x4   [1, 0, 0, 0, 1, 0]       [4, 4, 1, 0, 0, 0, 1, 0]         NO-SOL            0
+  4   4x4   [0, 1, 0, 1, 0, 0]       [4, 4, 0, 1, 0, 1, 0, 0]         NO-SOL            5
+  5   5x5   [2, 0, 0, 0, 0, 0]       [5, 5, 2, 0, 0, 0, 0, 0]         NO-SOL            0
+  6   6x5   [2, 0, 0, 0, 0, 0]       [6, 5, 2, 0, 0, 0, 0, 0]         NO-SOL            7
+  7   8x4   [1, 1, 0, 0, 0, 0]       [8, 4, 1, 1, 0, 0, 0, 0]         SOLVABLE          3
+  8   6x6   [1, 1, 0, 0, 0, 0]       [6, 6, 1, 1, 0, 0, 0, 0]         NO-SOL           10
+  9   8x8   [1, 1, 1, 1, 1, 1]       [8, 8, 1, 1, 1, 1, 1, 1]         SOLVABLE          7
+ 10  10x10  [1, 1, 1, 1, 1, 1]       [10, 10, 1, 1, 1, 1, 1, 1]       SOLVABLE          7
+ 11   8x8   [2, 2, 2, 2, 0, 0]       [8, 8, 2, 2, 2, 2, 0, 0]         NO-SOL            0
+ 12  12x12  [2, 2, 2, 2, 2, 2]       [12, 12, 2, 2, 2, 2, 2, 2]       SOLVABLE         13
+
+Run hardware (cocotb): cd test && make
+Compare DUT byte against this script's 'result' column.
+
+---
+Generated: 2026-04-21
+Command:   python day12_golden_model.py
+Python:    3.x (host)
+Note: nodes=0 means immediate NO-SOL from area feasibility check (no search performed).

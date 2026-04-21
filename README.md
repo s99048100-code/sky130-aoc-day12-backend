@@ -1,5 +1,7 @@
 # Day 12 Range Finder — Backend Notes
 
+![GDS Layout Render](https://github.com/s99048100-code/sky130-aoc-day12-backend/raw/main/gds_render.png)
+
 [![gds](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions/workflows/gds.yml/badge.svg)](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions)
 
 > **Attribution (read first).** The RTL
@@ -135,7 +137,8 @@ python day12_golden_model.py
 ```
 
 dumps the AXI byte sequence and expected DUT byte for every regression
-case. Diff that against the cocotb logs in `test/`.
+case. Diff that against the cocotb logs in `test/`. A captured run
+(13 cases, all verdicts) is in [`docs/golden_model_run.log`](docs/golden_model_run.log).
 
 ## Sign-off Numbers
 
@@ -263,6 +266,10 @@ The scaffolding for re-running PPA against a modified RTL is in place
 [`pipelined_compare.md`](pipelined_compare.md)) so the workflow is one
 RTL edit + one CI run away when the analysis hardens.
 
+The pipeline revert analysis — including static signal tracing, the
+double-write risk, and the recommended RTL fix — is documented in
+[`docs/design_notes.md`](docs/design_notes.md).
+
 ## Verification — cocotb Regression
 
 The cocotb testbench ([`test/test.py`](test/test.py)) runs a
@@ -312,6 +319,17 @@ rings, the full 4×2 Tiny Tapeout tile footprint):
 A high-res render produced by the Tiny Tapeout flow lives at
 [`gds_render.png`](gds_render.png).
 
+### 3D Layout Viewer
+
+An interactive glTF viewer (`viewer_3d.html`) ships in the repo root.
+Serve it locally with:
+
+```bash
+python -m http.server 8765
+```
+
+Then open `http://localhost:8765/viewer_3d.html` in a browser to
+explore the routed metal layers in 3-D.
 
 ## Repo Layout
 
@@ -328,7 +346,9 @@ formal/                 Yosys equivalence (project.v vs post-synth nl.v)
   final/metrics.csv
   final/gds/*.gds
   final/klayout_gds/*.gds
-docs/                   KLayout screenshots
+docs/                   KLayout screenshots + supplementary logs
+  design_notes.md       pipeline revert engineering analysis (negative result)
+  golden_model_run.log  captured golden model run (13 cases)
 day12_golden_model.py   Python reference
 extract_ppa.py          metrics.json → ppa_report.md
 compare_ppa.py          baseline vs aggressive → ppa_compare.md
