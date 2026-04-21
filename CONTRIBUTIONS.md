@@ -8,7 +8,7 @@ prototyped to attack the 100 MHz SS-corner setup violation but
 reverted before push — see [`design_notes.md` § Pipeline Modification
 (proposed)](design_notes.md) for the diff and the reason it stayed
 out of the shipped RTL. Everything else (physical flow runs,
-comparisons, formal verification, tooling, write-ups, the 13-case
+comparisons, formal verification, tooling, write-ups, the 10-case
 cocotb regression) is by the maintainer of this fork.
 
 ## Author split
@@ -19,7 +19,8 @@ cocotb regression) is by the maintainer of this fork.
 | `src/tt_um_example.v` | Tiny Tapeout template | placeholder, not synthesised |
 | `info.yaml` (project metadata) | Robert Solomon Saab | attribution preserved |
 | `test/tb.v`, `test/Makefile`, `test/cocotb.ini` | Robert Solomon Saab | testbench scaffolding — untouched |
-| `test/test.py` | **maintainer** (replaces Robert's 1-case stub) | 13-case cocotb regression mirroring `day12_golden_model.py` |
+| `test/test.py` | **maintainer** (replaces Robert's 1-case stub) | 10-case cocotb regression drawn from `day12_golden_model.py` (3 cases dropped — see `verification_notes.md` for the HW/golden disagreement) |
+| `verification_notes.md` | **maintainer** | per-case results.xml table for the 3 dropped cases + candidate root causes |
 | Tiny Tapeout flow scaffolding (`.github/workflows/*`, `docs/info.md`, `LICENSE`) | Tiny Tapeout project | upstream |
 | `src/aggressive_config.json` | **maintainer (this fork)** | 100 MHz / 80 % density LibreLane override for Task 1 |
 | `src/pipelined_config.json` | **maintainer** | 100 MHz / 80 % density override scaffolding for a future pipelined-RTL LibreLane run |

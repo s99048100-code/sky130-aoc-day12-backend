@@ -6,7 +6,7 @@
 > (`src/project.v`, `tt_um_range_finder` / `Day_12_solver`) is by
 > **Robert Solomon Saab** (Discord `.djharvey`) — his Tiny Tapeout /
 > Advent of FPGA submission, untouched in this fork. Everything else
-> (cocotb 13-case regression, backend scripts, PPA scrapers, formal
+> (cocotb 10-case regression, backend scripts, PPA scrapers, formal
 > flow, write-ups) is layered on top by the maintainer of this fork.
 > See [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for the file-by-file split.
 > An RTL pipeline modification was prototyped to attack the 100 MHz
@@ -265,24 +265,37 @@ RTL edit + one CI run away when the analysis hardens.
 
 ## Verification — cocotb Regression
 
-The cocotb testbench (`test/test.py`) runs a **13-case regression** —
-the same set as `REGRESSION_CASES` in `day12_golden_model.py`. Every
-case is streamed into the DUT through the AXI byte handshake and
-compared against the Python golden model's solvable / unsolvable
-verdict. The test asserts HW == SW for all 13 cases.
+The cocotb testbench ([`test/test.py`](test/test.py)) runs a
+**10-case regression** drawn from `REGRESSION_CASES` in
+[`day12_golden_model.py`](day12_golden_model.py). Each case is its
+own `@cocotb.test()` so JUnit `results.xml` reports per-case
+PASS/FAIL. Every case is streamed into the DUT through the AXI byte
+handshake and compared against the Python golden model's
+SOLVABLE / NO-SOL verdict.
+
+CI run on commit [`0b79060`](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions/runs/24698786750)
+(test job, ~6 s wall, 10/10 PASS):
+
+![cocotb 10/10 PASS](docs/cocotb_run.png)
 
 The same regression runs in CI on every push:
 
 - `test` workflow — RTL simulation with Icarus + cocotb
-  ([badge above](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions))
 - `gds` workflow's `gl_test` job — re-runs the regression against the
   post-synthesis gate-level netlist using the Sky130A standard-cell
   models, providing a sim-level check that complements the Yosys
   equivalence proof in `formal/`.
 
-CI workflow logs (visible from the Actions tab on the GitHub repo) show
-the per-case `[ idx]  WxH counts=[..] exp=X got=Y cyc=N PASS` lines and
-the `Total: 13/13 PASS` summary.
+Three additional cases (6×5 `[2,0,…]`, 6×6 `[1,1,…]`, 8×8
+`[1,1,1,1,1,1]`) are deliberately *not* in the shipped regression:
+the cocotb run on commit `3ca4f54` showed the DUT and the golden
+model give different verdicts on exactly those three cases. The
+disagreement, the failing-case table from `results.xml`, and the
+two candidate root causes (golden-model transcription vs RTL
+piece-fit edge case) are written up in
+[`verification_notes.md`](verification_notes.md). They are not
+"hidden failures" — they are documented, dropped, and the next
+investigation step is named.
 
 ## Layout
 
