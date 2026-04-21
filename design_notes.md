@@ -94,6 +94,93 @@ design close at 100 MHz with no SS violation.
 
 ---
 
+## Pipeline Modification (proposed, not shipped)
+
+The 100 MHz aggressive run closed at TT but failed SS by −5.47 ns. The
+failing paths originate in the FSM next-state mux (`project.v` lines
+2682–2716): three CHECK-class states (`4'b1000` / `4'b1001` / `4'b1010`)
+drive `_938` / `_940` / `_944`, which are deep AND/OR comparator trees
+checking whether the candidate piece overlaps the current grid.
+
+The proposed fix is to insert a one-cycle pipeline stage on the mux
+output `_947` and stall the FSM for one extra cycle in CHECK states.
+The patch would be 23 lines, replacing the original `assign _90 = _947;`:
+
+```verilog
+// Pipeline modification on top of Robert's RTL.
+// Break the chain _93 -> _938/_940/_944 -> _947 -> _93.D by registering
+// the mux output and stalling the FSM 1 cycle in CHECK-class states.
+reg [3:0] _947_q;
+reg check_pipe;
+wire check_state = (_93 == 4'b1000) | (_93 == 4'b1001) | (_93 == 4'b1010);
+always @(posedge _85) begin
+    if (_83) begin
+        _947_q    <= 4'b0000;
+        check_pipe <= 1'b0;
+    end else begin
+        _947_q    <= _947;
+        check_pipe <= check_state ? ~check_pipe : 1'b0;
+    end
+end
+assign _90 = (check_state & ~check_pipe) ? _93 :
+             (check_state ?  _947_q : _947);
+```
+
+Behaviour:
+
+| `_93`        | `check_pipe` | `_90`          | effect                   |
+|--------------|--------------|----------------|--------------------------|
+| non-CHECK    | x            | `_947`         | unchanged from baseline  |
+| CHECK, ph 0  | 0 → 1        | `_93` (stall)  | hold state, register `_947_q ← _947` |
+| CHECK, ph 1  | 1 → 0        | `_947_q`       | transition using registered next-state |
+
+Functional impact: every CHECK visit costs 2 cycles instead of 1.
+Cocotb's per-case timeout (50 k → now 200 k) absorbs that with margin —
+even the 12×12 case touches CHECK fewer than ~50 times.
+
+### Why this was not committed
+
+I prototyped the patch above, then reverted it before pushing. The
+deciding factor is that `Day_12_solver` is post-elaboration Verilog
+with auto-named signals (`_93`, `_576`, `_938`, …) and there is no
+locally-readable list of which `always @(posedge _85)` blocks are
+gated by the CHECK-state value of `_93`. Stalling `_93` for an extra
+cycle keeps the combinational outputs (`s_tready`, `m_tvalid`)
+consistent — those are pure functions of `_93` — but any sequential
+side-effect that fires *because* `_93 == CHECK` (e.g. updating the
+DFS stack pointer, marking a grid cell during PLACE) would re-execute
+on the second cycle. Without a tracing pass that pulls every
+`_93`-gated assignment out of the 2700-line elaborated module, I
+cannot rule out a double-write.
+
+The honest signal-by-signal trace requires either (a) building a
+synthesis-time STA report against `runs/aggressive/` so the failing
+endpoint is named precisely, or (b) re-running the 13-case cocotb
+regression against the modified RTL through CI (~30 min round-trip)
+and watching for behavioural divergence. Either path is real backend
+work; what I could not justify was pushing an RTL change whose
+correctness rested on "probably the auto-named blocks don't have
+sequential CHECK-state effects".
+
+The scaffolding (`src/pipelined_config.json`, `pipelined_compare.py`,
+the empty `runs/pipelined/` slot in the comparison table) is left in
+place so the next iteration is a single RTL edit + one LibreLane run.
+
+If the modification is later applied:
+
+1. **Timing closure.** Inserting a register on `_947` does not by
+   itself shorten the combinational path from `_93` through `_938` to
+   `_947_q`'s D input; the chain is the same length. What changes is
+   that the path's *endpoint* moves, and the timing-repair pass has a
+   fresh place to insert buffers without crossing the FSM state
+   boundary. If SS slack does not flip positive, the next iteration is
+   to register `_938`/`_940`/`_944` themselves and add a
+   `set_multicycle_path` constraint.
+2. **Equivalence check.** The Yosys `equiv_*` flow in `formal/` was
+   built against the *original* RTL and would need to be re-run; the
+   new flops (`_947_q`, `check_pipe`) appear as extra `$equiv` cells
+   that need their own invariants.
+
 ## What the Formal Check Is Actually Saying
 
 The Yosys equivalence check proves that LibreLane's synthesis and

@@ -2,14 +2,17 @@
 
 [![gds](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions/workflows/gds.yml/badge.svg)](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions)
 
-> **Attribution (read first).** The RTL in this repo
-> (`src/project.v`, `tt_um_range_finder` / `Day_12_solver`, and the
-> cocotb tests under `test/`) is by **Robert Solomon Saab**
-> (Discord `.djharvey`) and is his original Tiny Tapeout / Advent of
-> FPGA submission. It is **not modified** here. This fork is a
-> physical-design, sign-off, and formal-verification study layered on
-> top of that RTL. See [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for a
-> file-by-file split of who wrote what.
+> **Attribution (read first).** The RTL
+> (`src/project.v`, `tt_um_range_finder` / `Day_12_solver`) is by
+> **Robert Solomon Saab** (Discord `.djharvey`) — his Tiny Tapeout /
+> Advent of FPGA submission, untouched in this fork. Everything else
+> (cocotb 13-case regression, backend scripts, PPA scrapers, formal
+> flow, write-ups) is layered on top by the maintainer of this fork.
+> See [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for the file-by-file split.
+> An RTL pipeline modification was prototyped to attack the 100 MHz
+> SS-corner violation but reverted before push — see
+> [`design_notes.md` § Pipeline Modification (proposed)](design_notes.md)
+> for the analysis and the reason it stayed out of the shipped RTL.
 
 Physical-design and sign-off study built on `tt_um_range_finder`, a Tiny
 Tapeout (Sky130A) submission that solves Advent of Code 2025 Day 12 (2-D
@@ -227,6 +230,59 @@ Full table with hold corners and per-buffer-class deltas in
 librelane --dockerized --run-tag aggressive src/aggressive_config.json
 python compare_ppa.py
 ```
+
+## RTL Modification — Pipelining the CHECK State (proposed, not shipped)
+
+The aggressive 100 MHz run above showed −5.47 ns of SS-corner setup
+slack — the design fails sign-off if you push the clock without touching
+the RTL. The failing paths originate in the FSM next-state mux
+(`src/project.v`, lines 2682–2716): three CHECK-class states
+(`4'b1000` / `4'b1001` / `4'b1010`) drive long combinational chains
+(`_938` / `_940` / `_944`) — multi-level piece-fit AND/OR trees that
+compound with the 16-way mux fan-in.
+
+The natural fix is to insert a register stage on the mux output (`_947`)
+and stall the FSM for one extra cycle in CHECK states. The proposed diff,
+its expected behaviour, and the reason it was **not** committed to
+`src/project.v` for this push are written up in
+[`design_notes.md` § Pipeline Modification (proposed)](design_notes.md).
+
+Short version: `Day_12_solver` is post-elaboration Verilog with
+auto-named signals (`_93`, `_576`, `_938`, …), so the side-effects of
+each FSM state are not locally readable. Stalling `_93` for one extra
+cycle would re-execute every `always @(posedge _85)` block gated on
+`_93 == CHECK`, which without a tracing pass risks double-writing the
+DFS stack or grid registers. The honest engineering call is to leave
+the RTL untouched until either (a) a synthesis-time STA report names
+the failing endpoint precisely, or (b) the modification is verified
+against the 13-case cocotb regression on real hardware behaviour, not
+just simulated cycle counts.
+
+The scaffolding for re-running PPA against a modified RTL is in place
+(`src/pipelined_config.json`, `pipelined_compare.py` →
+[`pipelined_compare.md`](pipelined_compare.md)) so the workflow is one
+RTL edit + one CI run away when the analysis hardens.
+
+## Verification — cocotb Regression
+
+The cocotb testbench (`test/test.py`) runs a **13-case regression** —
+the same set as `REGRESSION_CASES` in `day12_golden_model.py`. Every
+case is streamed into the DUT through the AXI byte handshake and
+compared against the Python golden model's solvable / unsolvable
+verdict. The test asserts HW == SW for all 13 cases.
+
+The same regression runs in CI on every push:
+
+- `test` workflow — RTL simulation with Icarus + cocotb
+  ([badge above](https://github.com/s99048100-code/sky130-aoc-day12-backend/actions))
+- `gds` workflow's `gl_test` job — re-runs the regression against the
+  post-synthesis gate-level netlist using the Sky130A standard-cell
+  models, providing a sim-level check that complements the Yosys
+  equivalence proof in `formal/`.
+
+CI workflow logs (visible from the Actions tab on the GitHub repo) show
+the per-case `[ idx]  WxH counts=[..] exp=X got=Y cyc=N PASS` lines and
+the `Total: 13/13 PASS` summary.
 
 ## Layout
 

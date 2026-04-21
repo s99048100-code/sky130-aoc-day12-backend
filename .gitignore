@@ -24,6 +24,7 @@ test/tb.gtkw
 
 src/user_config.json
 src/config_merged.json
+src/runs/
 
 tt_submission/
 *.tar.gz
